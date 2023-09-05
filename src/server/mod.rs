@@ -1,16 +1,34 @@
 use std::{
     fs,
-    io::{self, Read, Write},
+    io::{self, prelude::*, Read, Write}, thread, time::Duration, net,
 };
 
-pub struct Request<'a> {
-    pub method: &'a str,
-    pub path: &'a str,
+pub struct Request {
+    pub method: String,
+    pub path: String,
+    stream: net::TcpStream,
 }
 
-impl<'a> Request<'a> {
-    pub fn new(method: &'a str, path: &'a str) -> Request<'a> {
-        Request { method, path }
+impl Request {
+    pub fn new(stream: net::TcpStream) -> Request {
+        Request {
+            method: String::new(),
+            path: String::new(),
+            stream,
+        }
+    }
+
+    pub fn process(&self) -> Request {
+        let bufer_read = io::BufReader::new(&self.stream);
+
+        let http_request: Vec<_> = bufer_read
+            .lines()
+            .map(|res| res.unwrap())
+            .take_while(|line| !line.is_empty())
+            .collect();
+
+        let req: Vec<_> = http_request[0].split(' ').collect();
+        Request { method: String::from(req[0]), path: String::from(req[1]), stream: self.stream.try_clone().unwrap() }
     }
 }
 
@@ -18,29 +36,36 @@ type Status = String;
 type Body = String;
 type Headers = String;
 
-pub struct Response<'a> {
+pub struct Response {
     pub status: Status,
     pub body: Body,
     pub headers: Headers,
-    request: Request<'a>,
-    stream: std::net::TcpStream,
+    request: Request,
 }
 
-impl<'a> Response<'a> {
-    pub fn new(request: Request<'a>, stream: std::net::TcpStream) -> Response {
+impl Response {
+    pub fn new(request: Request) -> Response {
         Response {
             status: String::new(),
             body: String::new(),
             headers: String::new(),
             request,
-            stream,
         }
     }
 
     #[allow(unused_assignments)]
     pub fn send(&mut self) -> Result<(), io::Error> {
-        let (status_line, body, headers) = match self.request.path {
+        let (status_line, body, headers) = match self.request.path.as_str() {
             "/" => {
+                let body = match fs::read_to_string("page.html") {
+                    Ok(content) => content,
+                    Err(err) => create_page(err, "page")?,
+                };
+                let length = body.len();
+                (format!("HTTP/1.1 200 OK"), body, format!("Content-Length: {}", length))
+            },
+            "/test" => {
+                thread::sleep(Duration::from_secs(5));
                 let body = match fs::read_to_string("page.html") {
                     Ok(content) => content,
                     Err(err) => create_page(err, "page")?,
@@ -60,7 +85,7 @@ impl<'a> Response<'a> {
 
         let response = format!("{status_line}\r\n{headers}\r\n\r\n{body}");
 
-        self.stream.write_all(response.as_bytes())?;
+        self.request.stream.write_all(response.as_bytes())?;
 
         Ok(())
     }

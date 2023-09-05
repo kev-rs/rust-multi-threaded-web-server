@@ -2,7 +2,7 @@ pub mod server;
 use crate::server::{ Request, Response };
 
 use std::{
-    io::{self, prelude::*},
+    io::{self},
     net,
 };
 
@@ -18,21 +18,10 @@ fn main() -> Result<(), io::Error> {
     Ok(())
 }
 
-fn handle_connection(mut stream: net::TcpStream) -> Result<(), io::Error> {
-    let buf_reader = io::BufReader::new(&mut stream);
+fn handle_connection(stream: net::TcpStream) -> Result<(), io::Error> {
+    let request: Request = Request::new(stream);
 
-    let http_request: Vec<_> = buf_reader
-        .lines()
-        .map(|res| res.unwrap())
-        .take_while(|line| !line.is_empty())
-        .collect();
-
-    let request_line = &http_request[0];
-    let request_line: Vec<_> = request_line.split(' ').collect();
-
-    let request: Request<'_> = Request::new(&request_line[0], &request_line[1]);
-
-    let mut response: Response<'_> = Response::new(request, stream);
+    let mut response: Response = Response::new(request.process());
 
     response.send()?;
 
