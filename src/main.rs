@@ -1,5 +1,5 @@
 pub mod server;
-use crate::server::{ Request, Response };
+use crate::server::{thread_pool::ThreadPool, Request, Response};
 
 use std::{
     io::{self},
@@ -8,11 +8,14 @@ use std::{
 
 fn main() -> Result<(), io::Error> {
     let listener: net::TcpListener = net::TcpListener::bind("127.0.0.1:7878")?;
+    let pool = ThreadPool::new(4);
 
     for stream in listener.incoming() {
         let stream: net::TcpStream = stream.unwrap();
 
-        handle_connection(stream)?;
+        pool.execute(|| {
+            handle_connection(stream).unwrap();
+        });
     }
 
     Ok(())
@@ -20,7 +23,6 @@ fn main() -> Result<(), io::Error> {
 
 fn handle_connection(stream: net::TcpStream) -> Result<(), io::Error> {
     let request: Request = Request::new(stream);
-
     let mut response: Response = Response::new(request.process());
 
     response.send()?;

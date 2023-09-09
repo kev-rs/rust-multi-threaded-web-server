@@ -1,6 +1,8 @@
+pub mod thread_pool;
+
 use std::{
     fs,
-    io::{self, prelude::*, Read, Write}, thread, time::Duration, net,
+    io::{self, prelude::*, Read, Write}, time::Duration, net, thread,
 };
 
 pub struct Request {
